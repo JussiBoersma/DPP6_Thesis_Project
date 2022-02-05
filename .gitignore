@@ -1,0 +1,11 @@
+data/CSV_files/*
+data/images/*
+data/XML_data/*
+Grad_CAM_results/individual_patients/*
+data/training/morphed_2D_train
+data/training/male_female_1D_train
+data/images/training/*
+data/validation/median_2D_val
+data/training/median_2D_train
+final_models/2D_VGG16_?
+models/2D_VGG16_?
