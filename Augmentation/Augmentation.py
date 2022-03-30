@@ -861,10 +861,10 @@ def extra_Pwave_removal(): # also centers the median beat
     df2 = pd.DataFrame(data)
     print(df2)
 
-    # os.chdir(r'C:\Users\jussi\Documents\Master Thesis\Data\Final_dataset_v3\median')
-    # df2.to_pickle('df_pwave_removed')       
-    os.chdir(r'D:\Master Thesis\Median_TransferLearning\median')   
-    df2.to_pickle('median_10k_df_imp') 
+    os.chdir(r'C:\Users\jussi\Documents\Master Thesis\Data\Final_dataset_v3\median')
+    df2.to_pickle('df_pwave_removed')       
+    # os.chdir(r'D:\Master Thesis\Median_TransferLearning\median')   
+    # df2.to_pickle('median_10k_df_imp') 
 
 # Plot the average negative and positive signal, used for grad cam plotting
 def plot_avg_pos_neg_signals():

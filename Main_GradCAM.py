@@ -344,6 +344,63 @@ class Two_D_single_img(nn.Module):
     def get_activations(self):
         return self.activations
 
+# The 2D network that takes in an image as 12 layered channels
+class Two_D_12channel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.block1 = self.conv_block(c_in=12, c_out=8, dropout=0.2, kernel_size=3, stride=1, padding=0)     # 0.4 dropout
+        self.block2 = self.conv_block(c_in=8, c_out=4, dropout=0.3, kernel_size=3, stride=1, padding=0)     # 0.5 dropout
+        self.block5 = nn.Conv2d(4, 10, kernel_size=30) # 96
+        self.fcRED = nn.Linear(10, 1)
+        self.dropout = nn.Dropout2d(p=0.2)   # 0.4 dropout
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+    def conv_block(self, c_in, c_out, dropout,  **kwargs):
+        seq_block = nn.Sequential(
+            nn.Conv2d(in_channels=c_in, out_channels=c_out, **kwargs),
+            nn.BatchNorm2d(num_features=c_out),
+            nn.ReLU(),
+            nn.Dropout2d(p=dropout)
+        )        
+        return seq_block
+
+    # Grad-CAM gradient hook functions
+    def activations_hook(self, grad):
+        self.gradients = grad
+    def set_activations(self, x):
+        self.activations = x
+    
+    def forward(self, leads):
+        print(leads.shape)
+        x = self.block1(leads)
+        print(x.shape)
+        x = self.maxpool(x)
+        print(x.shape)
+        x = self.block2(x)
+        print(x.shape)
+        # Register the hooks for Grad-CAM
+        self.set_activations(x)
+        h = x.register_hook(self.activations_hook)
+        x = self.maxpool(x)
+        print(x.shape)
+        x = self.block5(x)
+        print(x.shape)
+        flattend = x.view(x.size(0), -1)
+        print(x.shape)
+        # flattend = self.dropout(flattend)
+        x = self.fcRED(flattend)
+        print(x.shape)
+        sys.exit()
+        output = x
+        return output
+
+        # Grad-CAM gradient hook functions
+    def get_activations_gradient(self):
+        return self.gradients
+    def get_activations(self):
+        return self.activations
+
 
 def calc_acc(output, target, batch_size): #calculates the accuracy of 1 batch for the sake of printing the training accuracy per epoch
     correct = 0
@@ -373,12 +430,28 @@ def create_tensorDataset(df):
 
     return valid_ds
 
+# For the 2D_12channel model the structure of the data has to be reshaped to layer the leads as 12 channels
+def transform_df_to_12channel(df):
+    end_arr = []
+    for j in range(len(df)):
+        arr = df.iloc[j]
+        new_arr = []
+        for i in range(len(arr)):
+            if i < 12:
+                holder = arr[i]
+                holder1 = holder[0]
+                new_arr.append(holder1)
+            else:
+                new_arr.append(arr[i])
+        end_arr.append(new_arr)
+    df_new = pd.DataFrame(end_arr)
+    return df_new
 
 if __name__ == "__main__":
     dir = os.getcwd()
     os.chdir(dir+'\\data\\validation')
     
-    ans = input('Which model would you like to run for GradCAM?\n (A) \t 2D CNN median \n (B) \t 2D CNN single image\n')
+    ans = input('Which model would you like to run for GradCAM?\n (A) \t 2D CNN median \n (B) \t 2D CNN single image\n (C) \t 2D CNN 12 channel\n')
     model_nr = input('Which of the 5 trained models would you like to use?\n0, 1, 2, 3 or 4\n')
     nr = input('Would you like have individual patient Grad-CAMs (0) or a single summed Grad-CAM (1) ?\n')
     if nr == '0':
@@ -395,7 +468,7 @@ if __name__ == "__main__":
         model_name = '2D_median'
         # Create tensor datasets from the data
         valid_ds = create_tensorDataset(df)
-    else:
+    elif ans == 'B':
         model = Two_D_single_img()
         model.load_state_dict(torch.load(dir+'\\models\\Grad_2D_one_img_{0}'.format(model_nr)), strict=False)
         model.eval()
@@ -405,6 +478,15 @@ if __name__ == "__main__":
         ECG_dataset = datasets.ImageFolder(root = dir+'\\data\\validation\\testing_one_img', transform = image_transforms)
         # Define the  data loader
         valid_ds = torch.utils.data.DataLoader(ECG_dataset, batch_size=1)
+    elif ans == 'C':
+        model = Two_D_12channel()
+        model.load_state_dict(torch.load(dir+'\\models\\Grad_2D_12channel_{0}'.format(model_nr)), strict=False)
+        model.eval()
+        df = pd.read_pickle('median_2D_val')
+        model_name = '2D_12channel'
+        df = transform_df_to_12channel(df)
+        # Create tensor datasets from the data
+        valid_ds = create_tensorDataset(df)
 
     if model_name == '2D_median':
         # Declare an empty heatmap with zeros for later accumulation of heatmaps
@@ -594,7 +676,7 @@ if __name__ == "__main__":
                 cv2.imwrite('./{0}/{1}/V5.jpg'.format(diagnosis, patient_ID), fin[10])
                 cv2.imwrite('./{0}/{1}/V6.jpg'.format(diagnosis, patient_ID), fin[11])
 
-    else: # Run the one image gradcam
+    elif model_name == '2D_one_img': # Run the one image gradcam
         accum_heatmap = np.zeros((512,384))
         # If you want Grad-CAM activation (Does not work for VGG16)
         # Loop over the validation set
@@ -677,6 +759,88 @@ if __name__ == "__main__":
                     os.mkdir(dir+'\\Grad_CAM_results\\individual_patients_one_img\\{0}\\{1}'.format(diagnosis, patient_ID))
                 cv2.imwrite('./activation_maps/{0}/{1}/I.jpg'.format(diagnosis, patient_ID), superimposed_img)
 
+    elif model_name == '2D_12channel':
+         # Declare an empty heatmap with zeros for later accumulation of heatmaps
+        accum_heatmap = np.zeros((417,510))
+        # Loop over the validation set
+        for batch_idx, (data, target) in enumerate(valid_ds):
+            # Run the patient ECG through the model
+            output = model(data.unsqueeze(0))
+            output = torch.squeeze(output, -1)
+            # Run the output backward through the network to get the gradients
+            output[0].backward()
+
+            gradients = model.get_activations_gradient()
+            # pool the gradients across the channels
+            pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
+            # get the activations of the last convolutional layer
+            activations = model.get_activations().detach()
+            for i in range(4):
+                activations[:, i, :, :] *= pooled_gradients[i]
+            # average the channels of the activations
+            heatmap = torch.mean(activations, dim=1).squeeze()
+            heatmap = heatmap.cpu()
+            heatmap = np.maximum(heatmap, 0)
+            # normalize the heatmap
+            heatmap /= torch.max(heatmap)
+            heatmap = np.array(heatmap)
+            # Gets the patient ID's
+            if int(target.item()) == 0:
+                diagnosis = 'negative'
+                pp = 0
+                for ppp in os.listdir(dir+'\\data\\images\\validation\\negative'): #these 2 loops are needed to get the correct patient file name into this code
+                    if pp == batch_idx:
+                        patient_ID = ppp
+                    pp += 1
+            else:
+                diagnosis = 'positive'
+                pp = 24
+                for ppp in os.listdir(dir+'\\data\\images\\validation\\negative'):
+                    if pp == batch_idx:
+                        patient_ID = ppp
+                    pp += 1
+            # Resize the heatmap to the original image
+            heatmap = cv2.resize(heatmap, (510, 417))
+            heatmap = np.uint8(255 * heatmap)
+
+
+            # Runs only the summed activation maps
+            if single_patient == False:  
+                # Sum the heatmaps for each patient
+                accum_heatmap = accum_heatmap + heatmap 
+
+                # If all negative patients have been run
+                if batch_idx == (len(valid_ds)-1):
+                    for j in range(417):
+                        for k in range(510):
+                            accum_heatmap[j,k] = accum_heatmap[j,k]/(len(valid_ds)/2) #normalize each pixel value
+                    accum_heatmap = accum_heatmap.astype(np.uint8)
+                    # Read in the original image
+                    os.chdir(dir+'\\data\\images\\avg_images')
+                    img = cv2.imread('0.png')
+                    fin = []
+                    # Apply the interpolation of the heatmap
+                    accum_heatmap = cv2.applyColorMap(accum_heatmap, cv2.COLORMAP_JET)
+                    accum_heatmap = accum_heatmap * 0.4
+                    img = np.asarray(img, np.float64)
+                    mapski = np.asarray(accum_heatmap, np.float64)
+                    # Add the mean heartbeat as background to interpolate the heatmap on
+                    fin = cv2.addWeighted(mapski, 2, img, 1.5, 0) 
+                    os.chdir(dir+'\\Grad_CAM_results')
+                    cv2.imwrite('./12channel_results/GRADCAM.jpg', fin)                       
+                            
+            else: # Plot every patients individually
+                heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+                superimposed_img = heatmap * 0.4 + img
+                try:
+                    os.mkdir(dir+'\\Grad_CAM_results\\individual_patients_one_img\\{0}\\{1}'.format(diagnosis, patient_ID))
+                except:
+                    if batch_idx == 0:
+                        print('NOTICE: overwriting previous individual patient plots')
+                    shutil.rmtree(dir+'\\individual_patients_one_img\\{0}\\{1}'.format(diagnosis, patient_ID))
+                    os.mkdir(dir+'\\Grad_CAM_results\\individual_patients_one_img\\{0}\\{1}'.format(diagnosis, patient_ID))
+                cv2.imwrite('./activation_maps/{0}/{1}/I.jpg'.format(diagnosis, patient_ID), superimposed_img)
+
     # else:
     correct = 0
     incorrect = 0
@@ -690,7 +854,7 @@ if __name__ == "__main__":
         # data = data.to(device)
         # target = target.to(device)
 
-        if model_name == '2D_median':
+        if model_name == '2D_median' or model_name == '2D_12channel':
             data = data.unsqueeze(0)
         else:
             target = target.float()
@@ -732,7 +896,7 @@ if __name__ == "__main__":
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic example')
+    plt.title('ROC_2D_12channel validation - model 4')
     plt.legend(loc="lower right")
     # plt.show()
 

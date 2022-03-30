@@ -51,12 +51,28 @@ def create_tensorDataset(df):
     valid_ds = TensorDataset(X_valid, y_valid)
     return valid_ds
 
+# For the 2D_12channel model the structure of the data has to be reshaped to layer the leads as 12 channels
+def transform_df_to_12channel(df):
+    end_arr = []
+    for j in range(len(df)):
+        arr = df.iloc[j]
+        new_arr = []
+        for i in range(len(arr)):
+            if i < 12:
+                holder = arr[i]
+                holder1 = holder[0]
+                new_arr.append(holder1)
+            else:
+                new_arr.append(arr[i])
+        end_arr.append(new_arr)
+    df_new = pd.DataFrame(end_arr)
+    return df_new
 
 if __name__ == "__main__":
     dir = os.getcwd()
     os.chdir(dir+'\\data\\validation')
 
-    model_type = input("What model type would you like to validate? \n (A) \t 1D_median \n (B) \t 1D_lstm \n (C) \t 1D_transfer_median \n (D) \t 1D_3beats \n (E) \t 1D_Median_Betti \n (F) \t 1D_Wave_Stretch \n (G) \t 2D_median \n (H) \t 2D_median_one_img \n (I) \t 2D_morphed \n (J) \t VGG16 \n")
+    model_type = input("What model type would you like to validate? \n (A) \t 1D_median \n (B) \t 1D_lstm \n (C) \t 1D_transfer_median \n (D) \t 1D_3beats \n (E) \t 1D_Median_Betti \n (F) \t 1D_Wave_Stretch \n (G) \t 2D_median \n (H) \t 2D_median_one_img \n (I) \t 2D_median_12channel \n (J) \t 2D_morphed \n (K) \t VGG16 \n")
     
     acc_arr, spec_arr, sens_arr, auc_arr = ([] for i in range(4))
     for cnt in range(5):
@@ -67,28 +83,24 @@ if __name__ == "__main__":
             model_name = '1D_median'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 8
         elif model_type == 'B':
             model = torch.load(dir+'\\models\\1D_lstm_{0}'.format(cnt))
             df = pd.read_pickle('median_1D_val')
             model_name = '1D_lstm'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 8
         elif model_type == 'C':
             model = torch.load(dir+'\\models\\1D_transfer_median_{0}'.format(cnt))
             df = pd.read_pickle('median_1D_val')
             model_name = '1D_transfer_median'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 8
         elif model_type == 'D':
             model = torch.load(dir+'\\models\\1D_3beats_{0}'.format(cnt))
             df = pd.read_pickle('3beat_1D_val')
             model_name = '1D_3beats'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 8
         elif model_type == 'E':
             model = torch.load(dir+'\\models\\1D_median_betti_{0}'.format(cnt))
             df_median = pd.read_pickle('median_1D_val')
@@ -102,41 +114,41 @@ if __name__ == "__main__":
             df = df.drop(df.columns[12], axis=1)
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 8
         elif model_type == 'F':
             model = torch.load(dir+'\\models\\1D_wave_stretch_{0}'.format(cnt))
             df = pd.read_pickle('median_1D_val')
             model_name = '1D_wave_stretch'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 8
         elif model_type == 'G':
             model = torch.load(dir+'\\models\\2D_median_{0}'.format(cnt))
             df = pd.read_pickle('median_2D_val')
             model_name = '2D_median'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 10
         elif model_type == 'H':
             model = torch.load(dir+'\\models\\2D_one_img_{0}'.format(cnt))
             model_name = '2D_one_img'
-            n_epochs = 10
             image_transforms = transforms.Compose([transforms.Resize((256, 192)), transforms.ToTensor()]) #(256, 256)
             # Create a dataset from the images
             ECG_dataset = datasets.ImageFolder(root = dir+'\\data\\validation\\testing_one_img', transform = image_transforms)
             # Define the  data loader
             valid_ds = torch.utils.data.DataLoader(ECG_dataset, batch_size=1)
         elif model_type == 'I':
+            model = torch.load(dir+'\\models\\2D_12channel_{0}'.format(cnt))
+            df = pd.read_pickle('median_2D_val')
+            model_name = '2D_12channel'
+            df = transform_df_to_12channel(df)
+            valid_ds = create_tensorDataset(df)
+        elif model_type == 'J':
             model = torch.load(dir+'\\models\\2D_morphed_{0}'.format(cnt))
-            df = pd.read_pickle('medianMorph_2D val')
+            df = pd.read_pickle('median_2D_val')
             model_name = '2D_morphed'
             # Create tensor datasets from the data
             valid_ds = create_tensorDataset(df)
-            n_epochs = 10
-        elif model_type == 'J':
+        elif model_type == 'K':
             model = torch.load(dir+'\\models\\2D_VGG16_{0}'.format(cnt))
             model_name = '2D_VGG16'
-            n_epochs = 10
             image_transforms = transforms.Compose([transforms.Resize((256, 192)), transforms.ToTensor()]) #(256, 256)
             # Create a dataset from the images
             ECG_dataset = datasets.ImageFolder(root = dir+'\\data\\validation\\testing_one_img', transform = image_transforms)
@@ -186,7 +198,7 @@ if __name__ == "__main__":
                         incorrect += 1
                         patient_hist[batch_idx] += 1
                         FP += 1
-            np.save(r'C:\Users\jussi\Documents\Master Thesis\Code_Refactored\data\model_{0}'.format(cnt), patient_hist)
+            # np.save(r'C:\Users\jussi\Documents\Master Thesis\Code_Refactored\data\model_{0}'.format(cnt), patient_hist)
             # Prepare the AUC metrics
             fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score, pos_label = 1)
             roc_auc = metrics.auc(fpr, tpr)

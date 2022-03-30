@@ -321,6 +321,39 @@ class Two_D(nn.Module):
         output = x
         return output
 
+# The 2D network that takes in an image as 12 layered channels
+class Two_D_12channel(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.block1 = self.conv_block(c_in=12, c_out=8, dropout=0.2, kernel_size=3, stride=1, padding=0)     # 0.4 dropout
+        self.block2 = self.conv_block(c_in=8, c_out=4, dropout=0.3, kernel_size=3, stride=1, padding=0)     # 0.5 dropout
+        self.block5 = nn.Conv2d(4, 10, kernel_size=30) # 96
+        self.fcRED = nn.Linear(10, 1)
+        self.dropout = nn.Dropout2d(p=0.2)   # 0.4 dropout
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+    def conv_block(self, c_in, c_out, dropout,  **kwargs):
+        seq_block = nn.Sequential(
+            nn.Conv2d(in_channels=c_in, out_channels=c_out, **kwargs),
+            nn.BatchNorm2d(num_features=c_out),
+            nn.ReLU(),
+            nn.Dropout2d(p=dropout)
+        )        
+        return seq_block
+    
+    def forward(self, leads):
+        x = self.block1(leads)
+        x = self.maxpool(x)
+        x = self.block2(x)
+        x = self.maxpool(x)
+        x = self.block5(x)
+        flattend = x.view(x.size(0), -1)
+        # flattend = self.dropout(flattend)
+        x = self.fcRED(flattend)
+        output = x
+        return output
+
 # The definition of the VGG16 architecture
 class VGG16(nn.Module):
     def __init__(self):

@@ -63,9 +63,9 @@ os.chdir(dir+'\\combined_plots')
 
 
 
-line_names_2D = ['2D_combined', '2D_median', '2D_morphed']
-colors = ['r', 'b', 'g']
-colors2 = ['salmon', 'royalblue', 'limegreen']
+line_names_2D = ['2D_12channel', '2D_combined', '2D_median', '2D_morphed']
+colors = ['r', 'b', 'g', 'orange']
+colors2 = ['salmon', 'royalblue', 'limegreen', 'moccasin']
 
 cnt = 0
 for file in os.listdir(dir+'\\combined_plots'):

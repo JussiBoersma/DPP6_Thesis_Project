@@ -32,7 +32,7 @@ import sys
 import statistics as st
 from matplotlib.collections import PolyCollection
 from scipy import interp
-from Model_classes import One_D_CNN, One_D_3beats_CNN, One_D_LSTM, One_D_Med_Betti, One_D_MF_CNN, Two_D, Two_D_single_img, VGG16
+from Model_classes import One_D_CNN, One_D_3beats_CNN, One_D_LSTM, One_D_Med_Betti, One_D_MF_CNN, Two_D, Two_D_12channel, Two_D_single_img, VGG16, Two_D_12channel
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # The sigmoid function to run the model output through
@@ -258,12 +258,28 @@ def train_one_img_model(model, trainloader, testloader, n_epochs):
         accuracy['val'].append(test_acc_tot/len(testloader))
     return model, loss, accuracy
 
+# For the 2D_12channel model the structure of the data has to be reshaped to layer the leads as 12 channels
+def transform_df_to_12channel(df):
+    end_arr = []
+    for j in range(len(df)):
+        arr = df.iloc[j]
+        new_arr = []
+        for i in range(len(arr)):
+            if i < 12:
+                holder = arr[i]
+                holder1 = holder[0]
+                new_arr.append(holder1)
+            else:
+                new_arr.append(arr[i])
+        end_arr.append(new_arr)
+    df_new = pd.DataFrame(end_arr)
+    return df_new
 
 if __name__ == "__main__":
     dir = os.getcwd()
     os.chdir(dir+'\\data\\training')
 
-    model_type = input("What model type would you like to train? \n (A) \t 1D_median \n (B) \t 1D_lstm \n (C) \t 1D_Male_Female \n (D) \t 1D_transfer_median \n (E) \t 1D_3beats \n (F) \t 1D_Median_Betti \n (G) \t 1D_Wave_Stretch \n (H) \t 2D_median \n (I) \t 2D_median_one_img \n (J) \t 2D_morphed \n (K) \t VGG16 \n")
+    model_type = input("What model type would you like to train? \n (A) \t 1D_median \n (B) \t 1D_lstm \n (C) \t 1D_Male_Female \n (D) \t 1D_transfer_median \n (E) \t 1D_3beats \n (F) \t 1D_Median_Betti \n (G) \t 1D_Wave_Stretch \n (H) \t 2D_median \n (I) \t 2D_median_one_img \n (J) \t 2D_12channel \n (K) \t 2D_morphed \n (L) \t VGG16 \n")
     # Get the model type the user wants to run
     if model_type == 'A':
         model = One_D_CNN()
@@ -320,11 +336,17 @@ if __name__ == "__main__":
         # Create a dataset from the images
         ECG_dataset = datasets.ImageFolder(root = dir+'\\data\\training\\training_one_img', transform = image_transforms)
     elif model_type == 'J':
+        model = Two_D_12channel()
+        df = pd.read_pickle('median_2D_train')
+        model_name = '2D_12channel'
+        n_epochs = 10
+        df = transform_df_to_12channel(df)
+    elif model_type == 'K':
         model = Two_D()
         df = pd.read_pickle('morphed_2D_train')
         model_name = '2D_morphed'
         n_epochs = 10
-    elif model_type == 'K':
+    elif model_type == 'L':
         model = VGG16()
         model_name = '2D_VGG16'
         n_epochs = 50
@@ -332,7 +354,7 @@ if __name__ == "__main__":
         # Create a dataset from the images
         ECG_dataset = datasets.ImageFolder(root = dir+'\\data\\training\\training_one_img', transform = image_transforms)
 
-        # Set this to True for plotting the training AUCs, set it to false for plotting the training metrics
+    # Set this to True for plotting the training AUCs, set it to false for plotting the training metrics
     plot_AUCs = False
     # Set to true for 5 seperate AUCs
     per_Model_Plot = False
@@ -385,10 +407,12 @@ if __name__ == "__main__":
         # Save the training metrics for later plotting
         loss_arr.append(xx)
         acc_arr.append(yy)
+
         # Save the model in a different way for the gradcam
-        # if model_name == '2D_median' or model_name == '2D_one_img':
-        #     torch.save(model_out.state_dict(), dir+'\models\Grad_{0}_{1}'.format(model_name, cnt))
-        # torch.save(model_out,  dir+'\models\{0}_{1}'.format(model_name, cnt))
+        if model_name == '2D_median' or model_name == '2D_one_img' or model_name == '2D_12channel':
+            torch.save(model_out.state_dict(), dir+'\models\Grad_{0}_{1}'.format(model_name, cnt))
+        # Save the model in the standard way
+        torch.save(model_out,  dir+'\models\{0}_{1}'.format(model_name, cnt))
         model_out.eval()
         # Declare some empty variables
         FP, FN, TP, TN, correct, incorrect = (0 for i in range(6))
