@@ -1,5 +1,8 @@
-The code used for making my masters thesis can be found in this repository. Below is the abstract of my thesis.
+#Master thesis Jussi Boersma
 
+The code used for making my masters thesis can be found in this repository. The data it self cannot be found here as it concerns sensitive patient data.
+
+##Abstract
 About 10 years ago a link was found between multiple patients with unexplained familial idiopathic
 ventricular fibrillation (IVF). IVF is very dangerous as it can lead to sudden cardiac death. Subsequently research was done in which the common link between these patients was found to be an
 excessive expression of the DPP6 gene on chromosome 7. Extensive genealogical tracing was done
